@@ -26,8 +26,14 @@ func (ic *ImageCache) GetRandom() (imageID string, image image.Image) {
 	ic.mux.RLock()
 	defer ic.mux.RUnlock()
 
+	cachedImagesLen := len(ic.storage)
+
+	if cachedImagesLen == 0 {
+		return "", nil
+	}
+
 	rand.Seed(time.Now().Unix())
-	randomIndex := rand.Intn(len(ic.storage))
+	randomIndex := rand.Intn(cachedImagesLen)
 
 	//TODO: make more effective
 	for i, value := range ic.storage {

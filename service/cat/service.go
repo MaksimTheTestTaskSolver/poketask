@@ -40,7 +40,11 @@ func (s *Service) GetCatImage() (image image.Image, catID string, err error) {
 	err = s.requestLimiter.AcquireLock(lockKey)
 	if err != nil {
 		catID, cachedImage := s.imageCache.GetRandom()
-		return cachedImage, catID, err
+		if cachedImage == nil {
+			// returned only when we have more than 10 concurrent requests without any cat images in the cache
+			return nil, "", fmt.Errorf("too many requests")
+		}
+		return cachedImage, catID, nil
 	}
 
 	defer s.requestLimiter.FreeLock(lockKey)
