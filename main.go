@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/MaksimTheTestTaskSolver/poketask/handler"
-	"github.com/MaksimTheTestTaskSolver/poketask/imageCache"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/cat"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/pokemon"
 )
@@ -14,9 +13,9 @@ import (
 const apiBasePath = "/api/v1"
 
 func main() {
-	pokemonService := pokemon.NewService(imageCache.NewImageCache())
-	catService := cat.NewService(imageCache.NewImageCache())
-	pokeCatHandler := handler.NewPokeCat(pokemonService, catService, imageCache.NewImageCache())
+	pokemonService := pokemon.NewService()
+	catService := cat.NewService()
+	pokeCatHandler := handler.NewPokeCat(pokemonService, catService)
 
 	router := gin.Default()
 	apiV1Group := router.Group(apiBasePath)

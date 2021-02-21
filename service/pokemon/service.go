@@ -4,20 +4,23 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/MaksimTheTestTaskSolver/poketask/imageCache"
+	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
+	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
 	httputil "github.com/MaksimTheTestTaskSolver/poketask/util/http"
 )
 
 const pokemonApiUrlPrefix = "https://pokeapi.co/api/v2/pokemon/"
 
-func NewService(imageCache *imageCache.ImageCache) *Service {
+func NewService() *Service {
 	return &Service{
-		imageCache: imageCache,
+		imageCache: imagecache.NewImageCache(),
+		requestLimiter: requestlimiter.NewRequestLimiter(0),
 	}
 }
 
 type Service struct {
-	imageCache *imageCache.ImageCache
+	imageCache *imagecache.ImageCache
+	requestLimiter *requestlimiter.RequestLimiter
 }
 
 type PokemonAPIResp struct {
@@ -34,8 +37,21 @@ func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
 		return pokemonImage, nil
 	}
 
+	err := s.requestLimiter.AcquireLock(pokemonID)
+	if err == requestlimiter.ErrQuotaReached {
+		return nil, err
+	}
+
+	if err == requestlimiter.ErrLockAlreadyAcquired {
+		fmt.Println("was in a waiting queue")
+		return s.imageCache.Get(pokemonID), nil
+	}
+
+	fmt.Println("calling pokemon API")
+	defer s.requestLimiter.FreeLock(pokemonID)
+
 	pokemonAPIResp := PokemonAPIResp{}
-	err := httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
+	err = httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
 	if err != nil {
 		return nil, fmt.Errorf("can't get data from pokemon API: %w\n", err)
 	}

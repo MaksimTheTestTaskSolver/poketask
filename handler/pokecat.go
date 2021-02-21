@@ -8,23 +8,26 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
 
-	"github.com/MaksimTheTestTaskSolver/poketask/imageCache"
+	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
+	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/cat"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/pokemon"
 )
 
-func NewPokeCat(pokemonService *pokemon.Service, catService *cat.Service, imageCache *imageCache.ImageCache) *PokeCat {
+func NewPokeCat(pokemonService *pokemon.Service, catService *cat.Service) *PokeCat {
 	return &PokeCat{
 		pokemonService: pokemonService,
 		catService: catService,
-		imageCache: imageCache,
+		imageCache: imagecache.NewImageCache(),
+		requestLimiter: requestlimiter.NewRequestLimiter(0),
 	}
 }
 
 type PokeCat struct {
 	pokemonService *pokemon.Service
 	catService *cat.Service
-	imageCache *imageCache.ImageCache
+	imageCache *imagecache.ImageCache
+	requestLimiter *requestlimiter.RequestLimiter
 }
 
 func (p *PokeCat) Handle(c *gin.Context) {
@@ -52,7 +55,7 @@ func (p *PokeCat) Handle(c *gin.Context) {
 		return
 	}
 
-	pokemonImage, err := p.pokemonService.GetPokemonImage(c.Param("pokemonId"))
+	pokemonImage, err := p.pokemonService.GetPokemonImage(pokemonID)
 	if err != nil {
 		fmt.Printf("can't get pokemon image: %s\n", err)
 		c.Status(http.StatusInternalServerError)

@@ -4,20 +4,23 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/MaksimTheTestTaskSolver/poketask/imageCache"
+	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
+	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
 	httputil "github.com/MaksimTheTestTaskSolver/poketask/util/http"
 )
 
 const catApiUrl = "https://api.thecatapi.com/v1/images/search?mime_types=png"
 
-func NewService(imageCache *imageCache.ImageCache) *Service {
+func NewService() *Service {
 	return &Service{
-		imageCache: imageCache,
+		imageCache: imagecache.NewImageCache(),
+		requestLimiter: requestlimiter.NewRequestLimiter(10),
 	}
 }
 
 type Service struct {
-	imageCache *imageCache.ImageCache
+	imageCache *imagecache.ImageCache
+	requestLimiter *requestlimiter.RequestLimiter
 }
 
 type CatAPIResp []struct {
@@ -47,6 +50,20 @@ func (s *Service) GetCatImage() (image image.Image, catID string, err error) {
 		fmt.Println("fetching cat from the cache")
 		return catImage, "", nil
 	}
+
+	err = s.requestLimiter.AcquireLock(firstCat.ID)
+	if err == requestlimiter.ErrQuotaReached {
+		catID, cachedImage := s.imageCache.GetRandom()
+		return cachedImage, catID, err
+	}
+
+	if err == requestlimiter.ErrLockAlreadyAcquired {
+		fmt.Println("was in a waiting queue")
+		return s.imageCache.Get(firstCat.ID), firstCat.ID, nil
+	}
+
+	fmt.Println("calling cat API")
+	defer s.requestLimiter.FreeLock(firstCat.ID)
 
 	if firstCat.URL == "" {
 		return nil, "", fmt.Errorf("no URL in the cat API ressponse")
