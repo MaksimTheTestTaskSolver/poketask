@@ -1,3 +1,4 @@
+// pokemon service fetches the pokemon image from the pokemon API. It uses caching and request limiting.
 package pokemon
 
 import (
@@ -29,6 +30,8 @@ type PokemonAPIResp struct {
 	} `json:"sprites"`
 }
 
+// GetPokemonImage returns the pokemon image by given pokemonID. It caches the fetched images and limits amount of
+// parallel requests to the API
 func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
 	pokemonImage := s.imageCache.Get(pokemonID)
 	if pokemonImage != nil {
@@ -47,11 +50,23 @@ func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
 		return s.imageCache.Get(pokemonID), nil
 	}
 
-	fmt.Println("calling pokemon API")
 	defer s.requestLimiter.FreeLock(pokemonID)
 
+	fmt.Println("calling pokemon API")
+
+	pokemonImage, err = s.GetImage(pokemonID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.imageCache.Set(pokemonID, pokemonImage)
+
+	return pokemonImage, nil
+}
+
+func (s *Service) GetImage(pokemonID string) (image.Image, error) {
 	pokemonAPIResp := PokemonAPIResp{}
-	err = httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
+	err := httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
 	if err != nil {
 		return nil, fmt.Errorf("can't get data from pokemon API: %w\n", err)
 	}
@@ -60,12 +75,10 @@ func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
 		return nil, fmt.Errorf("no URL in the pokemon API ressponse")
 	}
 
-	pokemonImage, err = httputil.GetImage(pokemonAPIResp.Sprites.FrontDefault)
+	pokemonImage, err := httputil.GetImage(pokemonAPIResp.Sprites.FrontDefault)
 	if err != nil {
 		return nil, fmt.Errorf("can't get pokemon image: %w", err)
 	}
-
-	s.imageCache.Set(pokemonID, pokemonImage)
 
 	return pokemonImage, nil
 }

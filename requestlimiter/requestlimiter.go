@@ -1,3 +1,4 @@
+// requestlimiter limits amount of concurrent requests for any given url
 package requestlimiter
 
 import (
@@ -29,6 +30,8 @@ func NewRequestLimiter(requestQuota int) *RequestLimiter {
 	return &requestLimiter
 }
 
+// AcquireLock tries to acquire a lock for the given key. If succeed returns nil error.
+// Call FreeLock after successfully acquiring the lock to avoid dead locks.
 func (r *RequestLimiter) AcquireLock(key string) error {
 	r.mux.RLock()
 
@@ -57,6 +60,7 @@ func (r *RequestLimiter) AcquireLock(key string) error {
 	return nil
 }
 
+// FreeLock frees the lock acquired by AcquireLock
 func (r *RequestLimiter) FreeLock(key string) {
 	close(r.keyLock[key])
 	if r.requestChan != nil {

@@ -1,8 +1,11 @@
+// pokemon service fetches the cat image from the cat API. It uses caching and request limiting.
 package cat
 
 import (
 	"fmt"
 	"image"
+	"math/rand"
+	"strconv"
 
 	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
 	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
@@ -13,68 +16,86 @@ const catApiUrl = "https://api.thecatapi.com/v1/images/search?mime_types=png"
 
 func NewService() *Service {
 	return &Service{
-		imageCache: imagecache.NewImageCache(),
+		imageCache:     imagecache.NewImageCache(),
 		requestLimiter: requestlimiter.NewRequestLimiter(10),
 	}
 }
 
 type Service struct {
-	imageCache *imagecache.ImageCache
+	imageCache     *imagecache.ImageCache
 	requestLimiter *requestlimiter.RequestLimiter
 }
 
-type CatAPIResp []struct {
-	ID     string `json:"id"`
-	URL    string `json:"url"`
+type CatAPIResp []Cat
+
+type Cat struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
 }
 
+// GetCatImage returns a random cat image. It caches the fetched images and limits amount of parallel requests to the API
 func (s *Service) GetCatImage() (image image.Image, catID string, err error) {
-	catAPIResp := CatAPIResp{}
-	err = httputil.Get(catApiUrl, &catAPIResp)
+	lockKey := strconv.Itoa(rand.Int())
+
+	err = s.requestLimiter.AcquireLock(lockKey)
 	if err != nil {
-		return nil, "", fmt.Errorf("can't get data from cat API: %w\n", err)
+		catID, cachedImage := s.imageCache.GetRandom()
+		return cachedImage, catID, err
 	}
 
-	if len(catAPIResp) == 0 {
-		return nil, "", fmt.Errorf("cat API returned an empty list\n")
+	defer s.requestLimiter.FreeLock(lockKey)
+
+	fmt.Println("calling cat API")
+
+	cat, err := s.GetCatResponse()
+	if err != nil {
+		return nil, "", err
 	}
 
-	firstCat := catAPIResp[0]
-	if firstCat.ID == "" {
-		return nil, "", fmt.Errorf("empty id in the response from cat API")
-	}
-
-	catImage := s.imageCache.Get(firstCat.ID)
+	catImage := s.imageCache.Get(cat.ID)
 	if catImage != nil {
 		//TODO: use logger
 		fmt.Println("fetching cat from the cache")
 		return catImage, "", nil
 	}
 
-	err = s.requestLimiter.AcquireLock(firstCat.ID)
-	if err == requestlimiter.ErrQuotaReached {
-		catID, cachedImage := s.imageCache.GetRandom()
-		return cachedImage, catID, err
-	}
-
-	if err == requestlimiter.ErrLockAlreadyAcquired {
-		fmt.Println("was in a waiting queue")
-		return s.imageCache.Get(firstCat.ID), firstCat.ID, nil
-	}
-
-	fmt.Println("calling cat API")
-	defer s.requestLimiter.FreeLock(firstCat.ID)
-
-	if firstCat.URL == "" {
-		return nil, "", fmt.Errorf("no URL in the cat API ressponse")
-	}
-
-	catImage, err = httputil.GetImage(firstCat.URL)
+	catImage, err = s.getCatImage(cat)
 	if err != nil {
-		return nil, "", fmt.Errorf("can't get cat image: %w", err)
+		return nil, "", err
 	}
 
-	s.imageCache.Set(firstCat.ID, catImage)
+	s.imageCache.Set(cat.ID, catImage)
 
-	return catImage, firstCat.ID, nil
+	return catImage, cat.ID, nil
+}
+
+func (s *Service) getCatImage(cat Cat) (image.Image, error) {
+	if cat.URL == "" {
+		return nil, fmt.Errorf("no URL in the cat API ressponse")
+	}
+
+	catImage, err := httputil.GetImage(cat.URL)
+	if err != nil {
+		return nil, fmt.Errorf("can't get cat image: %w", err)
+	}
+
+	return catImage, nil
+}
+
+func (s *Service) GetCatResponse() (Cat, error) {
+	catAPIResp := CatAPIResp{}
+	err := httputil.Get(catApiUrl, &catAPIResp)
+	if err != nil {
+		return Cat{}, fmt.Errorf("can't get data from cat API: %w\n", err)
+	}
+
+	if len(catAPIResp) == 0 {
+		return Cat{}, fmt.Errorf("cat API returned an empty list\n")
+	}
+
+	firstCat := catAPIResp[0]
+	if firstCat.ID == "" {
+		return Cat{}, fmt.Errorf("empty id in the response from cat API")
+	}
+	return firstCat, nil
 }

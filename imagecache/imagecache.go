@@ -2,12 +2,14 @@ package imagecache
 
 import (
 	"image"
+	"math/rand"
 	"sync"
+	"time"
 )
 
 type ImageCache struct {
 	storage map[string]image.Image
-	mux sync.RWMutex
+	mux     sync.RWMutex
 }
 
 func NewImageCache() *ImageCache {
@@ -23,9 +25,16 @@ func (ic *ImageCache) Get(key string) image.Image {
 func (ic *ImageCache) GetRandom() (imageID string, image image.Image) {
 	ic.mux.RLock()
 	defer ic.mux.RUnlock()
-	//TODO: return random value
+
+	rand.Seed(time.Now().Unix())
+	randomIndex := rand.Intn(len(ic.storage))
+
+	//TODO: make more effective
 	for i, value := range ic.storage {
-		return i, value
+		if randomIndex == 0 {
+			return i, value
+		}
+		randomIndex--
 	}
 	return "", nil
 }
