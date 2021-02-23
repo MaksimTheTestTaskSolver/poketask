@@ -3,6 +3,7 @@ package pokemon
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
 	"github.com/MaksimTheTestTaskSolver/poketask/model"
@@ -15,7 +16,7 @@ const pokemonApiUrlPrefix = "https://pokeapi.co/api/v2/pokemon/"
 func NewService() *Service {
 	return &Service{
 		imageCache: imagecache.NewImageCache(),
-		requestLimiter: requestlimiter.NewRequestLimiter(0),
+		requestLimiter: requestlimiter.NewRequestLimiter(),
 	}
 }
 
@@ -41,10 +42,6 @@ func (s *Service) GetPokemonImage(pokemonID string) (*model.Image, error) {
 	}
 
 	err := s.requestLimiter.AcquireLock(pokemonID)
-	if err == requestlimiter.ErrQuotaReached {
-		return nil, err
-	}
-
 	if err == requestlimiter.ErrLockAlreadyAcquired {
 		fmt.Println("was in a waiting queue")
 		return s.imageCache.Get(pokemonID), nil
@@ -66,7 +63,7 @@ func (s *Service) GetPokemonImage(pokemonID string) (*model.Image, error) {
 
 func (s *Service) GetImage(pokemonID string) (*model.Image, error) {
 	pokemonAPIResp := PokemonAPIResp{}
-	err := httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
+	err := httputil.Get(http.DefaultClient, pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
 	if err != nil {
 		return nil, fmt.Errorf("can't get data from pokemon API: %w\n", err)
 	}
@@ -75,7 +72,7 @@ func (s *Service) GetImage(pokemonID string) (*model.Image, error) {
 		return nil, fmt.Errorf("no URL in the pokemon API ressponse")
 	}
 
-	pokemonImage, err := httputil.GetImage(pokemonAPIResp.Sprites.FrontDefault)
+	pokemonImage, err := httputil.GetImage(http.DefaultClient, pokemonAPIResp.Sprites.FrontDefault)
 	if err != nil {
 		return nil, fmt.Errorf("can't get pokemon image: %w", err)
 	}

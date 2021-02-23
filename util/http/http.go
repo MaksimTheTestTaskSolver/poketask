@@ -10,8 +10,12 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-func Get(url string, respDestination interface{}) error {
-	resp, err := http.Get(url)
+type Client interface {
+	Get(url string) (resp *http.Response, err error)
+}
+
+func Get(client Client, url string, respDestination interface{}) error {
+	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("can't make GET request to %s: %w", url, err)
 	}
@@ -35,8 +39,8 @@ func Get(url string, respDestination interface{}) error {
 	return nil
 }
 
-func GetImage(url string) (image image.Image, err error) {
-	resp, err := http.Get(url)
+func GetImage(client Client, url string) (image image.Image, err error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("can't make GET request to %s: %w", url, err)
 	}
@@ -58,4 +62,3 @@ func GetImage(url string) (image image.Image, err error) {
 
 	return image, nil
 }
-

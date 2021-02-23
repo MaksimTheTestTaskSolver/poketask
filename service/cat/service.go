@@ -1,14 +1,14 @@
 package cat
+
 // cat service fetches the cat image from the cat API. It uses caching and request limiting.
 
 import (
+	"errors"
 	"fmt"
-	"math/rand"
-	"strconv"
+	"net/http"
 
 	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
 	"github.com/MaksimTheTestTaskSolver/poketask/model"
-	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
 	httputil "github.com/MaksimTheTestTaskSolver/poketask/util/http"
 )
 
@@ -16,14 +16,14 @@ const catApiUrl = "https://api.thecatapi.com/v1/images/search?mime_types=png"
 
 func NewService() *Service {
 	return &Service{
-		imageCache:     imagecache.NewImageCache(),
-		requestLimiter: requestlimiter.NewRequestLimiter(10),
+		imageCache: imagecache.NewImageCache(),
+		rlclient:   httputil.NewRLClient(10, true),
 	}
 }
 
 type Service struct {
-	imageCache     *imagecache.ImageCache
-	requestLimiter *requestlimiter.RequestLimiter
+	imageCache *imagecache.ImageCache
+	rlclient   *httputil.RLClient
 }
 
 type CatAPIResp []Cat
@@ -35,10 +35,10 @@ type Cat struct {
 
 // GetCatImage returns a random cat image. It caches the fetched images and limits amount of parallel requests to the API
 func (s *Service) GetCatImage() (*model.Image, error) {
-	lockKey := strconv.Itoa(rand.Int())
+	cat, err := s.GetCatResponse()
 
-	err := s.requestLimiter.AcquireLock(lockKey)
-	if err != nil {
+	if errors.Is(err, httputil.ErrQuotaReached) {
+		fmt.Println("request quota for cats API reached")
 		cachedImage := s.imageCache.GetRandom()
 		if cachedImage == nil {
 			// returned only when we have more than 10 concurrent requests without any cat images in the cache
@@ -47,11 +47,6 @@ func (s *Service) GetCatImage() (*model.Image, error) {
 		return cachedImage, nil
 	}
 
-	defer s.requestLimiter.FreeLock(lockKey)
-
-	fmt.Println("calling cat API")
-
-	cat, err := s.GetCatResponse()
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +74,7 @@ func (s *Service) getCatImage(cat Cat) (*model.Image, error) {
 		return nil, fmt.Errorf("no URL in the cat API ressponse")
 	}
 
-	catImage, err := httputil.GetImage(cat.URL)
+	catImage, err := httputil.GetImage(http.DefaultClient, cat.URL)
 	if err != nil {
 		return nil, fmt.Errorf("can't get cat image: %w", err)
 	}
@@ -89,7 +84,7 @@ func (s *Service) getCatImage(cat Cat) (*model.Image, error) {
 
 func (s *Service) GetCatResponse() (Cat, error) {
 	catAPIResp := CatAPIResp{}
-	err := httputil.Get(catApiUrl, &catAPIResp)
+	err := httputil.Get(s.rlclient, catApiUrl, &catAPIResp)
 	if err != nil {
 		return Cat{}, fmt.Errorf("can't get data from cat API: %w\n", err)
 	}
