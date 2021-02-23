@@ -1,11 +1,11 @@
-// pokemon service fetches the pokemon image from the pokemon API. It uses caching and request limiting.
 package pokemon
+// pokemon service fetches the pokemon image from the pokemon API. It uses caching and request limiting.
 
 import (
 	"fmt"
-	"image"
 
 	"github.com/MaksimTheTestTaskSolver/poketask/imagecache"
+	"github.com/MaksimTheTestTaskSolver/poketask/model"
 	"github.com/MaksimTheTestTaskSolver/poketask/requestlimiter"
 	httputil "github.com/MaksimTheTestTaskSolver/poketask/util/http"
 )
@@ -32,7 +32,7 @@ type PokemonAPIResp struct {
 
 // GetPokemonImage returns the pokemon image by given pokemonID. It caches the fetched images and limits amount of
 // parallel requests to the API
-func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
+func (s *Service) GetPokemonImage(pokemonID string) (*model.Image, error) {
 	pokemonImage := s.imageCache.Get(pokemonID)
 	if pokemonImage != nil {
 		//TODO: use logger
@@ -64,7 +64,7 @@ func (s *Service) GetPokemonImage(pokemonID string) (image.Image, error) {
 	return pokemonImage, nil
 }
 
-func (s *Service) GetImage(pokemonID string) (image.Image, error) {
+func (s *Service) GetImage(pokemonID string) (*model.Image, error) {
 	pokemonAPIResp := PokemonAPIResp{}
 	err := httputil.Get(pokemonApiUrlPrefix+pokemonID, &pokemonAPIResp)
 	if err != nil {
@@ -80,5 +80,5 @@ func (s *Service) GetImage(pokemonID string) (image.Image, error) {
 		return nil, fmt.Errorf("can't get pokemon image: %w", err)
 	}
 
-	return pokemonImage, nil
+	return &model.Image{ID: pokemonID, Image: pokemonImage}, nil
 }
