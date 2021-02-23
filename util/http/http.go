@@ -16,6 +16,8 @@ func Get(url string, respDestination interface{}) error {
 		return fmt.Errorf("can't make GET request to %s: %w", url, err)
 	}
 
+	defer resp.Body.Close()
+
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("can't read the response body from %s: %w", url, err)
@@ -38,6 +40,8 @@ func GetImage(url string) (image image.Image, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't make GET request to %s: %w", url, err)
 	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode > 400 {
 		respBody, err := ioutil.ReadAll(resp.Body)
