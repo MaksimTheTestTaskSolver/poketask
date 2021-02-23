@@ -3,10 +3,12 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
 
+	"github.com/MaksimTheTestTaskSolver/poketask/model"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/cat"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/imagemerger"
 	"github.com/MaksimTheTestTaskSolver/poketask/service/pokemon"
@@ -34,16 +36,9 @@ func (p *PokeCat) Handle(c *gin.Context) {
 		return
 	}
 
-	catImage, err := p.catService.GetCatImage()
+	catImage, pokemonImage, err := p.getImages(pokemonID)
 	if err != nil {
-		fmt.Printf("can't get cat image: %s\n", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	pokemonImage, err := p.pokemonService.GetPokemonImage(pokemonID)
-	if err != nil {
-		fmt.Printf("can't get pokemon image: %s\n", err)
+		fmt.Println(err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -59,5 +54,35 @@ func (p *PokeCat) Handle(c *gin.Context) {
 	if err != nil {
 		fmt.Printf("can't encode resulting image: %s", err)
 		c.Status(http.StatusInternalServerError)
+		return
 	}
+}
+
+func (p *PokeCat) getImages(pokemonID string) (catImage, pokemonImage *model.Image, err error) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var catError, pokemonError error
+
+	go func() {
+		defer wg.Done()
+		catImage, catError = p.catService.GetCatImage()
+	}()
+
+	go func() {
+		defer wg.Done()
+		pokemonImage, pokemonError = p.pokemonService.GetPokemonImage(pokemonID)
+	}()
+
+	wg.Wait()
+
+	if catError != nil {
+		return nil, nil, fmt.Errorf("can't get cat image: %s", catError)
+	}
+
+	if pokemonError != nil {
+		return nil, nil, fmt.Errorf("can't get pokemon image: %s", pokemonError)
+	}
+
+	return catImage, pokemonImage, nil
 }
