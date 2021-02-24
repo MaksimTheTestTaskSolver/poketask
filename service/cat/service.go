@@ -1,6 +1,5 @@
-package cat
-
 // cat service fetches the cat image from the cat API. It uses caching and request limiting.
+package cat
 
 import (
 	"errors"
@@ -52,12 +51,20 @@ func (s *Service) GetCatImage() (*model.Image, error) {
 	}
 
 	// TODO: check why the same picture of cat has different ids
-	catImage := s.imageCache.Get(cat.ID)
+	catImage, unlock, err := s.imageCache.GetWithLock(cat.ID)
+	if err != nil {
+		return nil, fmt.Errorf("can't get the cat image from cache with lock: %w", err)
+	}
+
+	defer unlock()
+
 	if catImage != nil {
 		//TODO: use logger
 		fmt.Println("fetching cat from the cache")
 		return catImage, nil
 	}
+
+	fmt.Println("cat image cache miss", cat.ID, cat.URL)
 
 	catImage, err = s.getCatImage(cat)
 	if err != nil {
